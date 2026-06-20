@@ -53,6 +53,8 @@
                 </a>
             @endif  -->
 
+      <a href="/register" class="block text-orange-600 underline">Daftar</a>
+
       <x-primary-button class="ms-3 bg-orange-600">
         {{ __("Log in") }}
       </x-primary-button>

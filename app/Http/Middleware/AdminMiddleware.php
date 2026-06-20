@@ -16,7 +16,7 @@ class AdminMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if(Auth::user()->role !== "admin") return redirect()->back(403);
+        if(Auth::user()->role !== "admin") return redirect()->route('pinjaman.my');
         return $next($request);
     }
 }

@@ -6,13 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\Barang;
 use App\Models\Pinjaman;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class PinjamanController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Pinjaman::with('barang')->latest();
+        $query = Pinjaman::with(['barang', 'user'])->latest();
 
         if ($request->has('search') && $request->search != '') {
             $query->where('peminjam', 'like', '%' . $request->search . '%');
@@ -25,6 +26,21 @@ class PinjamanController extends Controller
         $pinjamans = $query->paginate(15)->withQueryString();
 
         return view('admin.pinjaman.index', compact('pinjamans'));
+    }
+
+    public function pending(Request $request)
+    {
+        $query = Pinjaman::with(['barang', 'user'])
+            ->where('status', 'Pending')
+            ->latest();
+
+        if ($request->has('search') && $request->search != '') {
+            $query->where('peminjam', 'like', '%' . $request->search . '%');
+        }
+
+        $pinjamans = $query->paginate(15)->withQueryString();
+
+        return view('admin.pinjaman.pending', compact('pinjamans'));
     }
 
     public function create()
@@ -76,6 +92,50 @@ class PinjamanController extends Controller
         });
 
         return redirect()->route('admin.pinjaman.index')->with('success', 'Transaksi peminjaman berhasil dicatat!');
+    }
+
+    public function approve(Request $request, $id)
+    {
+        $pinjaman = Pinjaman::findOrFail($id);
+
+        if ($pinjaman->status !== 'Pending') {
+            return redirect()->back()->with('error', 'Permintaan ini tidak berada pada status Pending.');
+        }
+
+        $barang = Barang::findOrFail($pinjaman->barang_id);
+
+        if ($barang->stock_tersedia < $pinjaman->jumlah_dipinjam) {
+            return redirect()->back()->with('error', 'Stok tidak mencukupi untuk menyetujui permintaan ini.');
+        }
+
+        DB::transaction(function () use ($pinjaman, $barang) {
+            $pinjaman->update([
+                'status' => 'Dipinjam',
+                'approved_by' => Auth::id(),
+                'approved_at' => now(),
+            ]);
+
+            $barang->decrement('stock_tersedia', $pinjaman->jumlah_dipinjam);
+        });
+
+        return redirect()->back()->with('success', 'Permintaan pinjaman berhasil disetujui.');
+    }
+
+    public function reject(Request $request, $id)
+    {
+        $pinjaman = Pinjaman::findOrFail($id);
+
+        if ($pinjaman->status !== 'Pending') {
+            return redirect()->back()->with('error', 'Permintaan ini tidak berada pada status Pending.');
+        }
+
+        $pinjaman->update([
+            'status' => 'Ditolak',
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+        ]);
+
+        return redirect()->back()->with('success', 'Permintaan pinjaman telah ditolak.');
     }
 
     // 4. Logika Mengembalikan Barang (Update Status ke Selesai)
